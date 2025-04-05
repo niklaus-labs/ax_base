@@ -254,7 +254,7 @@ java_library_static {
         "aconfig_adbdauth_flags_java_lib",
         "AvfBuildFlags",
         "vendor.aospa.biometrics.face",
-        "vendor.aac.hardware.richtap.vibrator-V1-java",
+        "vendor.aac.hardware.richtap.vibrator-V2-java",
     ],
     javac_shard_size: 50,
     javacflags: [
