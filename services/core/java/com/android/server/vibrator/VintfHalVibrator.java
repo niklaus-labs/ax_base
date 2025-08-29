@@ -371,8 +371,21 @@ class VintfHalVibrator {
             Trace.traceBegin(TRACE_TAG_VIBRATOR, "HalVibrator.onPrebaked");
             try {
                 synchronized (mLock) {
-                    int result;
-                    if (mVibratorInfo.hasCapability(IVibrator.CAP_PERFORM_CALLBACK)) {
+                    int result = 0;
+                    boolean useRichTap = mRichTapService != null
+                            && RichTapVibrationEffect.isInnerEffectSupported(
+                                    prebaked.getEffectId());
+                    int strength = useRichTap
+                            ? RichTapVibrationEffect.getInnerEffectStrength(
+                                    prebaked.getEffectStrength())
+                            : 0;
+                    if (strength > 0) {
+                        result = 30;
+                        int richTapEffectId = RichTapVibrationEffect.getInnerEffectId(
+                                prebaked.getEffectId());
+                        mRichTapService.richTapVibratorPerform(richTapEffectId, (byte) strength);
+                    }
+                    if (result <= 0 && mVibratorInfo.hasCapability(IVibrator.CAP_PERFORM_CALLBACK)) {
                         // Delegate vibrate with callback to native, to avoid creating a new
                         // callback instance for each call, overloading the GC.
                         result = mNativeHandler.vibrateWithCallback(mVibratorId, vibrationId,
