@@ -19,6 +19,7 @@ package android.graphics;
 import android.annotation.NonNull;
 import android.annotation.Nullable;
 import android.graphics.Shader.TileMode;
+import android.util.MathUtils;
 
 import libcore.util.NativeAllocationRegistry;
 
@@ -122,6 +123,52 @@ public final class RenderEffect {
                         edgeTreatment.nativeInt
                 )
             );
+    }
+
+    /**
+     * Create an Oplus-compatible gradient blur effect.
+     *
+     * <p>Oplus framework clients expect this API to exist on devices that support their material
+     * blur stack. The native implementation maps the Oplus parameters onto the platform HWUI blur
+     * pipeline when the full Oplus native renderer is not present.</p>
+     * @hide
+     */
+    @NonNull
+    public static RenderEffect createGradientBlurEffect(float startRadius, float endRadius,
+            boolean isVertical, float speed, int blendMode, int blendC, int mixC,
+            @Nullable RenderEffect inputEffect) {
+        long nativeInputEffect = inputEffect != null ? inputEffect.mNativeRenderEffect : 0;
+        float maxRadius = MathUtils.max(startRadius, endRadius);
+        return new RenderEffect(nativeCreateGradientBlurEffect(
+                isVertical ? maxRadius : startRadius,
+                isVertical ? maxRadius : endRadius,
+                isVertical ? startRadius : maxRadius,
+                isVertical ? endRadius : maxRadius,
+                speed,
+                blendMode,
+                blendC,
+                mixC,
+                nativeInputEffect));
+    }
+
+     /**
+      * Create an Oplus-compatible Kawase blur effect.
+      * @hide
+      */
+    @NonNull
+    public static RenderEffect createKawaseBlurEffect(float radius,
+            @Nullable RenderEffect inputEffect) {
+        long nativeInputEffect = inputEffect != null ? inputEffect.mNativeRenderEffect : 0;
+        return new RenderEffect(nativeCreateKawaseBlurEffect(radius, nativeInputEffect));
+    }
+
+     /**
+      * Create an Oplus-compatible Kawase blur effect.
+      * @hide
+      */
+    @NonNull
+    public static RenderEffect createKawaseBlurEffect(float radius) {
+        return new RenderEffect(nativeCreateKawaseBlurEffect(radius, 0));
     }
 
     /**
@@ -328,6 +375,10 @@ public final class RenderEffect {
             float offsetX, float offsetY, long nativeInput);
     private static native long nativeCreateBlurEffect(
             float radiusX, float radiusY, long nativeInput, int edgeTreatment);
+    private static native long nativeCreateGradientBlurEffect(
+            float radiusLeft, float radiusRight, float radiusTop, float radiusBottom, float speed,
+            int blendMode, int blendC, int mixC, long nativeInput);
+    private static native long nativeCreateKawaseBlurEffect(float radius, long nativeInput);
     private static native long nativeCreateBitmapEffect(
             long bitmapHandle, float srcLeft, float srcTop, float srcRight, float srcBottom,
             float dstLeft, float dstTop, float dstRight, float dstBottom);
