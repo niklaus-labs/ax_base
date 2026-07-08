@@ -379,6 +379,26 @@ public final class Gainmap implements Parcelable {
         return nGetDirection(mNativePtr);
     }
 
+    /**
+     * Oplus compatibility API. Stock Oplus framework exposes an HDR scale accessor on Gainmap and
+     * Gallery reflects on it while parsing Ultra HDR metadata.
+     *
+     * @hide
+     */
+    public void setHdrScale(float scale) {
+        setDisplayRatioForFullHdr(scale);
+    }
+
+    /**
+     * Oplus compatibility API. AOSP stores the same effective HDR headroom as the full-HDR display
+     * ratio, so expose that value under the vendor method name.
+     *
+     * @hide
+     */
+    public float getHdrScale() {
+        return getDisplayRatioForFullHdr();
+    }
+
 
     /**
      * No special parcel contents.
