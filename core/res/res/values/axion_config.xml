@@ -125,4 +125,7 @@
 
     <color name="dual_badge_icon_bg_color">#FFD71920</color>
     <color name="dual_badge_icon_color">#FFFFFFFF</color>
+
+    <!-- Whether device has physical tri state switch -->
+    <bool name="config_hasAlertSlider">false</bool>
 </resources>
