@@ -23,4 +23,12 @@
 
     <!-- wether to use display cutout as top padding of the qs panel if false will use ax_qs_top_padding -->
     <bool name="config_shouldUseDisplayCutOutPadding" translatable="false">true</bool>
+
+    <!-- The location of the devices physical tri state switch
+         0: Left side
+         1: Right side -->
+    <integer name="config_alertSliderLocation">0</integer>
+
+    <!-- Key handler broadcast when changing slider position -->
+    <string name="config_alertSliderIntent" translatable="false"></string>
 </resources>
