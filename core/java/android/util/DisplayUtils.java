@@ -16,8 +16,10 @@
 
 package android.util;
 
+import android.content.Context;
 import android.content.res.Resources;
 import android.view.Display;
+import android.view.DisplayInfo;
 
 import com.android.internal.R;
 
@@ -82,5 +84,21 @@ public class DisplayUtils {
         final float widthRatio = (float) currentWidth / physicalWidth;
         final float heightRatio = (float) currentHeight / physicalHeight;
         return Math.min(widthRatio, heightRatio);
+    }
+
+    /**
+     * Returns the physical-to-current display size ratio for the display's maximum
+     * resolution mode. Used by the tri-state (alert slider) HUD to place its dialog.
+     */
+    public static float getScaleFactor(Context context) {
+        DisplayInfo displayInfo = new DisplayInfo();
+        context.getDisplay().getDisplayInfo(displayInfo);
+        final Display.Mode maxDisplayMode =
+                getMaximumResolutionDisplayMode(displayInfo.supportedModes);
+        final float scaleFactor = getPhysicalPixelDisplaySizeRatio(
+                maxDisplayMode.getPhysicalWidth(), maxDisplayMode.getPhysicalHeight(),
+                displayInfo.getNaturalWidth(), displayInfo.getNaturalHeight());
+
+        return scaleFactor;
     }
 }
