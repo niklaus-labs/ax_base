@@ -96,6 +96,7 @@ final class VibratorController implements HalVibrator {
                 vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_SPIN, 10);
                 vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 10);
                 vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 10);
+                setRichTapSupportedEffectsLocked(vibratorInfoBuilder);
             }
             mVibratorInfo = vibratorInfoBuilder.build();
             if (!mVibratorInfoLoadSuccessful) {
@@ -134,6 +135,7 @@ final class VibratorController implements HalVibrator {
                     vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_SPIN, 10);
                     vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_TICK, 10);
                     vibratorInfoBuilder.setSupportedPrimitive(VibrationEffect.Composition.PRIMITIVE_LOW_TICK, 10);
+                    setRichTapSupportedEffectsLocked(vibratorInfoBuilder);
                 }
                 mVibratorInfo = vibratorInfoBuilder.build();
                 if (!mVibratorInfoLoadSuccessful) {
@@ -177,6 +179,46 @@ final class VibratorController implements HalVibrator {
     /** Checks if the {@link VibratorInfo} was loaded from the vibrator hardware successfully. */
     boolean isVibratorInfoLoadSuccessful() {
         return mVibratorInfoLoadSuccessful;
+    }
+
+    /**
+     * Declares the prebaked effects RichTap actually plays (via {@link RichTapVibrationEffect
+     * #getInnerEffect}) as HAL-supported, merged with whatever the native HAL already reported.
+     *
+     * <p>Without this, {@link VibratorInfo#isEffectSupported} only reflects what the native QTI
+     * HAL itself declares - it has no way of knowing RichTap can also play these, since RichTap
+     * dispatch happens entirely outside the native HAL. Upstream code that checks effect support
+     * before/around dispatch (segment validation, fallback decisions) was working off an
+     * incomplete picture for every effect RichTap - not the native HAL - actually handles.
+     */
+    private void setRichTapSupportedEffectsLocked(VibratorInfo.Builder builder) {
+        int[] richTapEffects = {
+                VibrationEffect.EFFECT_CLICK,
+                VibrationEffect.EFFECT_DOUBLE_CLICK,
+                VibrationEffect.EFFECT_TICK,
+                VibrationEffect.EFFECT_THUD,
+                VibrationEffect.EFFECT_POP,
+                VibrationEffect.EFFECT_HEAVY_CLICK,
+                VibrationEffect.EFFECT_TEXTURE_TICK,
+        };
+        android.util.SparseBooleanArray baseEffects = builder.build().getSupportedEffects();
+        java.util.HashSet<Integer> merged = new java.util.HashSet<>();
+        if (baseEffects != null) {
+            for (int i = 0; i < baseEffects.size(); i++) {
+                if (baseEffects.valueAt(i)) {
+                    merged.add(baseEffects.keyAt(i));
+                }
+            }
+        }
+        for (int effectId : richTapEffects) {
+            merged.add(effectId);
+        }
+        int[] mergedArray = new int[merged.size()];
+        int i = 0;
+        for (int effectId : merged) {
+            mergedArray[i++] = effectId;
+        }
+        builder.setSupportedEffects(mergedArray);
     }
 
     @NonNull
