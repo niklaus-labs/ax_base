@@ -358,6 +358,30 @@ final class VibratorController implements HalVibrator {
         try {
             synchronized (mLock) {
                 if (mRichTapService != null) {
+                    // Prefer the genuinely OEM-tuned .he resource file for this effect/strength
+                    // over the kanged pattern array below - see RichTapVibrationEffect
+                    // #getPrebakedHeEffect for why. Falls back to the kanged pattern (unchanged
+                    // behavior) if no resource file is found for this effect/strength.
+                    int[] hePattern = RichTapVibrationEffect.getPrebakedHeEffect(
+                            prebaked.getEffectId(), prebaked.getEffectStrength());
+                    if (hePattern != null) {
+                        // Data source only - do NOT report a non-zero duration here. Reporting
+                        // 30ms (tried previously) caused VibrationThread to schedule off() shortly
+                        // after each dispatch; off() calling mNativeWrapper.off() interleaved with
+                        // this raw-pattern render and corrupted it (logcat: "perform_cmd reset"
+                        // immediately followed by "invalid effect_type" on every keystroke). This
+                        // is the same off()-interleaving failure mode already confirmed on the
+                        // primitive/TICK path - isolating this change to pattern data only (same
+                        // discipline as the primitive path) avoids it. Strength is scaled via
+                        // getInnerEffectStrength() same as the kanged-pattern path below, instead
+                        // of a fixed max amplitude - resource-file patterns don't carry their own
+                        // framework strength scale, but the effect's requested strength tier still
+                        // should be respected rather than ignored.
+                        int strength = RichTapVibrationEffect.getInnerEffectStrength(
+                                prebaked.getEffectStrength());
+                        mRichTapService.richTapVibratorOnRawPattern(hePattern, strength, 0);
+                        return 0;
+                    }
                     int[] pattern = RichTapVibrationEffect.getInnerEffect(prebaked.getEffectId());
                     if (pattern != null) {
                         int strength = RichTapVibrationEffect.getInnerEffectStrength(
@@ -400,7 +424,35 @@ final class VibratorController implements HalVibrator {
                         int baseStrength = RichTapVibrationEffect.getInnerEffectStrength(VibrationEffect.EFFECT_STRENGTH_LIGHT);
                         int strength = (int) (baseStrength * scale);
                         if (strength > 10) {
-                            mRichTapService.richTapVibratorOnRawPattern(pattern, strength, 0);
+                            // For TICK specifically (what drag input - text selection, sliders -
+                            // fires rapidly), prefer the genuinely OEM-tuned tick.he resource
+                            // file over the kanged pattern above. Pattern data comes from the
+                            // MEDIUM/"default" tier (scale is continuous, unlike prebaked's
+                            // discrete strength levels, so one representative tier's pattern is
+                            // used and intensity is still controlled via the amplitude param
+                            // below, same as the kanged-pattern path already does).
+                            // Select the .he strength tier from the actual composition scale,
+                            // instead of always using MEDIUM - the tier isn't just an amplitude
+                            // multiplier, its Intensity/Frequency curve is baked into the parsed
+                            // pattern itself, so always loading the MEDIUM tier meant every TICK
+                            // rode that tier's waveform shape regardless of the requested
+                            // intensity, only ever getting quieter (not actually softer-feeling)
+                            // as scale dropped.
+                            int tickStrengthTier = (scale < 0.4f)
+                                    ? VibrationEffect.EFFECT_STRENGTH_LIGHT
+                                    : (scale > 0.7f)
+                                            ? VibrationEffect.EFFECT_STRENGTH_STRONG
+                                            : VibrationEffect.EFFECT_STRENGTH_MEDIUM;
+                            int[] hePattern = (mappedEffectId == VibrationEffect.EFFECT_TICK)
+                                    ? RichTapVibrationEffect.getPrebakedHeEffect(
+                                            VibrationEffect.EFFECT_TICK, tickStrengthTier)
+                                    : null;
+                            if (hePattern != null) {
+                                int heAmplitude = (int) (0xff * scale);
+                                mRichTapService.richTapVibratorOnRawPattern(hePattern, heAmplitude, 0);
+                            } else {
+                                mRichTapService.richTapVibratorOnRawPattern(pattern, strength, 0);
+                            }
                         }
                     }
                     return 0;
