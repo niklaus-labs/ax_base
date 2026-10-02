@@ -21,6 +21,7 @@ import android.hardware.vibrator.IVibrator;
 import android.os.Binder;
 import android.os.IBinder;
 import android.os.ServiceManager;
+import android.os.SystemClock;
 import android.util.Slog;
 
 import vendor.aac.hardware.richtap.vibrator.IRichtapCallback;
@@ -35,9 +36,23 @@ public class RichTapVibratorService {
     private static final boolean DEBUG = false;
     private static final int RICHTAP_LOOPER_ONCE = 1;
 
+    /**
+     * Minimum spacing between two "tick-class" raw-pattern dispatches (drag input such as text
+     * selection handles and sliders). The RichTap HAL queues every performHe() it receives and
+     * plays them back to back, so a fast drag that dispatches faster than the patterns can play
+     * builds a backlog that keeps vibrating after the finger is released. Dropping ticks that
+     * arrive inside this window keeps the HAL queue shallow. Tune between ~30 and ~60 ms.
+     */
+    private static final long TICK_MIN_INTERVAL_MS = 40;
+
     @NonNull
     private final IRichtapCallback mCallback;
     private volatile IRichtapVibrator sRichtapVibratorService = null;
+
+    private final Object mTickLock = new Object();
+    // uptimeMillis of the last tick-class dispatch; starts far enough in the past to never gate
+    // the first tick after boot.
+    private long mLastTickDispatchUptimeMs = -TICK_MIN_INTERVAL_MS * 2;
 
     @Nullable
     private synchronized IRichtapVibrator getRichtapService() {
@@ -141,6 +156,26 @@ public class RichTapVibratorService {
         } catch (Exception e) {
             Slog.e(TAG, "Failed to execute raw pattern", e);
         }
+    }
+
+    /**
+     * Dispatches a raw pattern for rapidly repeating tick-class feedback, dropping it if the
+     * previous tick was dispatched less than {@link #TICK_MIN_INTERVAL_MS} ago. Does not touch
+     * the HAL (no stop/off) when dropping, so it cannot interleave with a pattern in flight.
+     *
+     * @return true if the pattern was dispatched, false if it was dropped
+     */
+    public boolean richTapVibratorOnTickPattern(@NonNull int[] pattern, int amplitude, int freq) {
+        final long now = SystemClock.uptimeMillis();
+        synchronized (mTickLock) {
+            if (now - mLastTickDispatchUptimeMs < TICK_MIN_INTERVAL_MS) {
+                if (DEBUG) Slog.d(TAG, "Dropping tick, too soon after previous tick");
+                return false;
+            }
+            mLastTickDispatchUptimeMs = now;
+        }
+        richTapVibratorOnRawPattern(pattern, amplitude, freq);
+        return true;
     }
 
     void resetHalServiceProxy() {
