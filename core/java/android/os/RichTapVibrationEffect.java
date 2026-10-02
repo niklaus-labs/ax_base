@@ -67,6 +67,35 @@ public final class RichTapVibrationEffect {
     }
 
     /**
+     * Gets an approximate playback duration (in milliseconds) for the given effect id's inner
+     * pattern. RichTap's HAL reports no duration of its own, so this is a conservative estimate;
+     * callers use it to let the step conductor pace dispatches instead of assuming each one
+     * finishes instantly.
+     *
+     * @param id The vibration effect ID
+     * @return Approximate duration in milliseconds, always positive.
+     */
+    public static long getInnerEffectDuration(int id) {
+        switch (id) {
+            case VibrationEffect.EFFECT_CLICK:
+            case VibrationEffect.EFFECT_POP:
+                return 40L;
+            case VibrationEffect.EFFECT_DOUBLE_CLICK:
+                return 110L;
+            case VibrationEffect.EFFECT_TICK:
+                return 25L;
+            case VibrationEffect.EFFECT_THUD:
+                return 60L;
+            case VibrationEffect.EFFECT_HEAVY_CLICK:
+                return 50L;
+            case VibrationEffect.EFFECT_TEXTURE_TICK:
+                return 45L;
+            default:
+                return 30L;
+        }
+    }
+
+    /**
      * Gets the inner effect strength value for a given strength level.
      * @param strength The desired effect strength
      * @return Strength value, or 0 if invalid
