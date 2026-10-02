@@ -59,6 +59,17 @@ import com.android.internal.annotations.GuardedBy;
 final class AacHalVibrator implements HalVibrator {
     private static final String TAG = "AacHalVibrator";
 
+    // Leaky-bucket throttle for TICK dispatch (drag input: text selection, slider drags can
+    // fire one TICK per pointer-move event). Modeled on the native RichTap queue's own measured
+    // drain rate (~65-70ms/item) rather than a flat per-call gap, so a pause of any length -
+    // mid-drag or between two separate short gestures - drains the bucket proportionally
+    // instead of needing an arbitrary "new gesture" cutoff to reset it. Without this, dispatch
+    // reaches the native queue faster than it can drain regardless of how short a duration is
+    // reported back to the framework - the two are independent: one paces Java's own step
+    // timing, this paces what actually reaches the vendor HAL.
+    private static final float TICK_DRAIN_MS_PER_ITEM = 70f;
+    private static final float TICK_QUEUE_CAP = 2f;
+
     private final HalVibrator mBaseVibrator;
     private final RichTapVibratorService mAacService;
     private final Handler mHandler;
@@ -80,6 +91,10 @@ final class AacHalVibrator implements HalVibrator {
     private long mPulseDurationMs;
     @GuardedBy("mLock")
     private Object mPulseToken;
+    @GuardedBy("mLock")
+    private float mTickQueueDepth;
+    @GuardedBy("mLock")
+    private long mLastTickQueueUpdateMs;
 
     private volatile Callbacks mCallbacks;
     private volatile VibratorInfo mInfo;
@@ -294,10 +309,21 @@ final class AacHalVibrator implements HalVibrator {
                     // the framework to queue them up, resulting in vibrations continuing
                     // after the finger is lifted. Force the reported duration to be super short (12ms)
                     // without altering the HAL's actual playback time to avoid sharp active braking.
-                    if (mappedEffectId == VibrationEffect.EFFECT_TICK) {
+                    boolean isDragTick = mappedEffectId == VibrationEffect.EFFECT_TICK;
+                    if (isDragTick) {
                         reportedDuration = 12;
                     }
-                    dispatchPulse(token, pattern, strength, 0, effectDuration);
+                    // Shortening the reported duration above only paces the framework's own step
+                    // timing - it does nothing to limit how fast THIS call reaches the native
+                    // RichTap queue, which drains at a fixed rate regardless of dispatch rate.
+                    // Drag input (text selection, slider drags) can fire ticks faster than that
+                    // drain rate, building real backlog on the native side even though the
+                    // framework itself is pacing correctly. Gate just the native dispatch call
+                    // for ticks specifically - button-triggered primitives are never this rapid
+                    // and don't need it.
+                    if (!isDragTick || allowTickDispatch()) {
+                        dispatchPulse(token, pattern, strength, 0, effectDuration);
+                    }
                     totalDuration = reportedDuration;
                     anyDispatched = true;
                 }
@@ -471,6 +497,29 @@ final class AacHalVibrator implements HalVibrator {
      */
     private static Object newPulseToken() {
         return new Object();
+    }
+
+    /**
+     * Leaky-bucket gate for TICK dispatch. mTickQueueDepth approximates how many items are
+     * still sitting in the native RichTap queue: it decays continuously over real elapsed time
+     * at TICK_DRAIN_MS_PER_ITEM, and goes up by 1 each time a dispatch is actually allowed
+     * through. A pause of any length - mid-drag or between two separate short gestures - drains
+     * it proportionally, so there's no "is this a new gesture" heuristic to get wrong. The cap
+     * allows the first couple of ticks in any gesture through immediately, so a short/normal
+     * selection doesn't feel throttled at all - only sustained rapid input actually gets gated.
+     */
+    private boolean allowTickDispatch() {
+        synchronized (mLock) {
+            long now = android.os.SystemClock.elapsedRealtime();
+            long elapsedMs = now - mLastTickQueueUpdateMs;
+            mLastTickQueueUpdateMs = now;
+            mTickQueueDepth = Math.max(0f, mTickQueueDepth - (elapsedMs / TICK_DRAIN_MS_PER_ITEM));
+            if (mTickQueueDepth >= TICK_QUEUE_CAP) {
+                return false;
+            }
+            mTickQueueDepth += 1f;
+            return true;
+        }
     }
 
     private void dispatchPulse(Object token, int[] pattern, int strength, long delayMillis, long effectDuration) {
