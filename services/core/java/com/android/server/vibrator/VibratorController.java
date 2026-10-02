@@ -237,6 +237,12 @@ final class VibratorController implements HalVibrator {
         return mCurrentAmplitude;
     }
     
+    /** Effects fired in rapid bursts by drag input (text selection handles, sliders). */
+    private static boolean isDragTickEffect(int effectId) {
+        return effectId == VibrationEffect.EFFECT_TICK
+                || effectId == VibrationEffect.EFFECT_TEXTURE_TICK;
+    }
+
     @Override
     public boolean usesRichTap() {
         return mRichTapService != null;
@@ -379,14 +385,22 @@ final class VibratorController implements HalVibrator {
                         // should be respected rather than ignored.
                         int strength = RichTapVibrationEffect.getInnerEffectStrength(
                                 prebaked.getEffectStrength());
-                        mRichTapService.richTapVibratorOnRawPattern(hePattern, strength, 0);
+                        if (isDragTickEffect(prebaked.getEffectId())) {
+                            mRichTapService.richTapVibratorOnTickPattern(hePattern, strength, 0);
+                        } else {
+                            mRichTapService.richTapVibratorOnRawPattern(hePattern, strength, 0);
+                        }
                         return 0;
                     }
                     int[] pattern = RichTapVibrationEffect.getInnerEffect(prebaked.getEffectId());
                     if (pattern != null) {
                         int strength = RichTapVibrationEffect.getInnerEffectStrength(
                                 prebaked.getEffectStrength());
-                        mRichTapService.richTapVibratorOnRawPattern(pattern, strength, 0);
+                        if (isDragTickEffect(prebaked.getEffectId())) {
+                            mRichTapService.richTapVibratorOnTickPattern(pattern, strength, 0);
+                        } else {
+                            mRichTapService.richTapVibratorOnRawPattern(pattern, strength, 0);
+                        }
                     }
                     return 0;
                 }
@@ -447,9 +461,20 @@ final class VibratorController implements HalVibrator {
                                     ? RichTapVibrationEffect.getPrebakedHeEffect(
                                             VibrationEffect.EFFECT_TICK, tickStrengthTier)
                                     : null;
+                            // TICK is what drag input fires rapidly, so it goes through the
+                            // throttled dispatch; CLICK/THUD (taps) are never dropped.
+                            final boolean isTick = mappedEffectId == VibrationEffect.EFFECT_TICK;
                             if (hePattern != null) {
                                 int heAmplitude = (int) (0xff * scale);
-                                mRichTapService.richTapVibratorOnRawPattern(hePattern, heAmplitude, 0);
+                                if (isTick) {
+                                    mRichTapService.richTapVibratorOnTickPattern(
+                                            hePattern, heAmplitude, 0);
+                                } else {
+                                    mRichTapService.richTapVibratorOnRawPattern(
+                                            hePattern, heAmplitude, 0);
+                                }
+                            } else if (isTick) {
+                                mRichTapService.richTapVibratorOnTickPattern(pattern, strength, 0);
                             } else {
                                 mRichTapService.richTapVibratorOnRawPattern(pattern, strength, 0);
                             }
