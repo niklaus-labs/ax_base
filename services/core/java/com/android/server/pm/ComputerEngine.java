@@ -129,7 +129,6 @@ import android.util.Xml;
 import android.util.proto.ProtoOutputStream;
 import android.security.pif.PlayIntegritySpoofService;
 
-import com.android.internal.annotations.GuardedBy;
 import com.android.internal.annotations.VisibleForTesting;
 import com.android.internal.pm.pkg.component.ParsedActivity;
 import com.android.internal.pm.pkg.component.ParsedInstrumentation;
@@ -1282,23 +1281,6 @@ public class ComputerEngine implements Computer {
                     flags, filterCallingUid, userId);
         }
         return null;
-    }
-
-    @GuardedBy("mDefaultHomeCache")
-    private final SparseArray<String> mDefaultHomeCache = new SparseArray<>();
-
-    @Nullable
-    @Override
-    public final String getDefaultHome(@UserIdInt int userId) {
-        synchronized (mDefaultHomeCache) {
-            int index = mDefaultHomeCache.indexOfKey(userId);
-            if (index >= 0) {
-                return mDefaultHomeCache.valueAt(index);
-            }
-            String defaultHome = mDefaultAppProvider.getDefaultHome(userId);
-            mDefaultHomeCache.put(userId, defaultHome);
-            return defaultHome;
-        }
     }
 
     /**
