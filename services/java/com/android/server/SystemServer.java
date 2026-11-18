@@ -312,7 +312,6 @@ import com.android.server.usb.UsbService;
 import com.android.server.userrecovery.UserRecoveryManagerService;
 import com.android.server.utils.TimingsTraceAndSlog;
 import com.android.server.vcn.VcnLocation;
-import com.android.server.vibrator.LinearmotorVibratorService;
 import com.android.server.vibrator.VibratorManagerService;
 import com.android.server.voiceinteraction.VoiceInteractionManagerService;
 import com.android.server.wallpaper.WallpaperManagerService;
@@ -2936,10 +2935,6 @@ public final class SystemServer implements Dumpable {
                 mSystemServiceManager.startService(HbmService.class);
             }
         }
-
-        t.traceBegin("StartLinearmotorVibratorService");
-        mSystemServiceManager.startService(LinearmotorVibratorService.class);
-        t.traceEnd();
 
         t.traceBegin("StartMediaProjectionManager");
         mSystemServiceManager.startService(MediaProjectionManagerService.class);
